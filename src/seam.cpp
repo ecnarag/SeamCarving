@@ -1,6 +1,7 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <iostream>
 #include <fstream>
+#include <math.h>  
 
 #include "image.h"
 
@@ -9,7 +10,7 @@ using namespace cv;
 
 
 // Gradient (and derivatives), Sobel denoising
-void sobel(const Mat&Ic, Mat& Ix, Mat& Iy, Mat& G1)
+void sobel(const Mat& Ic, Mat& Ix, Mat& Iy, Mat& G1)
 {
 	Mat I;
 	cvtColor(Ic, I, CV_BGR2GRAY);
@@ -19,18 +20,25 @@ void sobel(const Mat&Ic, Mat& Ix, Mat& Iy, Mat& G1)
 	Iy = Mat(m, n, CV_32F);
 	G1 = Mat(m, n, CV_32F);
 
-	Sobel(Ic,Ix,-1,1,0);
-	Sobel(Ic,Iy,-1,0,1);
+	Sobel(I,Ix,CV_32F,1,0);
+	Sobel(I,Iy,CV_32F,0,1);
+
 
 	for (int i = 0; i < m; i++) {
 		for (int j = 0; j < n; j++) {
 			//float?
-			G1.at<float>(i,j) = float(floor(Ix.at<uchar>(i,j)) + floor(Iy.at<uchar>(i,j)));	
+			//cout << "ix = "<< endl << Ix.at<float>(i,j) << endl;
+			//cout << "iy = "<< endl << Iy.at<float>(i,j) << endl;
+			
+			G1.at<float>(i,j) = fabs(Ix.at<float>(i,j)) + fabs(Iy.at<float>(i,j));	
+			
 		}
 	}
+
+	//cout << "g1 = "<< endl << G1 << endl;
 }
 
-void findseamhorizontal(const Mat&E, Mat& Ih)
+void findseamhorizontal(const Mat& E, Mat& Ih)
 {
 	int m = E.rows, n = E.cols;
 	Ih = Mat(m, n, CV_32F);
@@ -67,6 +75,8 @@ int main() {
 	Mat Energie;
 	Mat Ix,Iy;
 	sobel(I,Ix,Iy,Energie);
+    imshow("e",Ix);
+    imshow("gie",Iy);
 	imshow("Energie",Energie);
 
 	Mat Mh;
@@ -89,8 +99,8 @@ int main() {
 		}
 		else{
 			for(int j = max(0, jmin-1); j <= min(jmin+1, n-1) ; j++){
-				if(Mh.at<float>(m-1,j) < Mval){
-					Mval = Mh.at<float>(m-1,j);
+				if(Mh.at<float>(i,j) < Mval){
+					Mval = Mh.at<float>(i,j);
 					jmin = j;
 				}
 			}
