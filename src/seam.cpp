@@ -1,6 +1,7 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <iostream>
 #include <fstream>
+#include <list>
 #include <math.h>  
 
 #include "image.h"
@@ -88,65 +89,60 @@ void energymatrixvertical(const Mat& E, Mat& Iv, int m, int n)
 }
 
 
-//Return the first seam from the energy matrix
-vector<int> findseamhorizontal(const Mat& I, Mat& Mh, int m, int n){
-	//int n = I.cols;
-	//int m = I.rows;
+vector <int> findseamhorizontal (const Mat& I, Mat& Mh, int m, int n, int i) {
 	vector<int> seam(n);
+	float Mval = Mh.at<float>(0,n-1);
+	for(int j = n-2; j >= 0; j--){
+		for(int ip = max(0, i-1); ip <= min(i+1, m-1) ; ip++){
+			if(Mh.at<float>(ip,j) < Mval){
+				Mval = Mh.at<float>(ip,j);
+				i = ip;
+			}
+		}
+		seam[j] = i;
+	}
+	return(seam);
+}
+			
+//Return the first seam from the energy matrix
+vector<int> findhminimalseam(const Mat& I, Mat& Mh, int m, int n){
 	int imin = 0;
 	float Mval = Mh.at<float>(0,n-1);
+	for(int i = 0; i < m ; i++){
+		if(Mh.at<float>(i,n-1) < Mval){
+			Mval = Mh.at<float>(i,n-1);
+			imin = i;
+		}
+	}
+	return(findseamhorizontal(I, Mh, m, n, imin));
+}
 
-	for(int j = n-1; j >= 0; j--){
-		if(j == n-1){
-			for(int i = 0; i < m ; i++){
-				if(Mh.at<float>(i,n-1) < Mval){
-					Mval = Mh.at<float>(i,n-1);
-					imin = i;
-				}
+
+vector<int> findseamvertical(const Mat& I, Mat& Mv, int m, int n, int j){
+	vector<int> seam(m);
+	float Mval2 = Mv.at<float>(m-1,0);
+	for(int i = m-2; i >= 0; i--){
+		for(int jp = max(0, j-1); jp <= min(j+1, n-1) ; jp++){
+			if(Mv.at<float>(i,jp) < Mval2){
+				Mval2 = Mv.at<float>(i,jp);
+				j = jp;
 			}
 		}
-		else{
-			for(int i = max(0, imin-1); i <= min(imin+1, m-1) ; i++){
-				if(Mh.at<float>(i,j) < Mval){
-					Mval = Mh.at<float>(i,j);
-					imin = i;
-				}
-			}
-		}
-		//vector<int> myvector
-		seam[j] = imin;
+		seam[i] = j;
 	}
 	return(seam);
 }
 
-
-vector<int> findseamvertical(const Mat& I, Mat& Mv, int m, int n){
-	//int m = I.rows;
-	//int n = I.cols;
-	vector<int> seam(m);
+vector<int> findvminimalseam(const Mat& I, Mat& Mv, int m, int n) {
 	int jmin = 0;
 	float Mval2 = Mv.at<float>(m-1,0);
-	for(int i = m-1; i >= 0; i--){
-		if(i == m-1){
-			for(int j = 0; j < n ; j++){
-				if(Mv.at<float>(m-1,j) < Mval2){
-					Mval2 = Mv.at<float>(m-1,j);
-					jmin = j;
-				}
-			}
+	for(int j = 0; j < n ; j++){
+		if(Mv.at<float>(m-1,j) < Mval2){
+			Mval2 = Mv.at<float>(m-1,j);
+			jmin = j;
 		}
-		else{
-			for(int j = max(0, jmin-1); j <= min(jmin+1, n-1) ; j++){
-				if(Mv.at<float>(i,j) < Mval2){
-					Mval2 = Mv.at<float>(i,j);
-					jmin = j;
-				}
-			}
-		}
-		//vector<int> myvector
-		seam[i] = jmin;
 	}
-	return(seam);
+	return(findseamvertical(I, Mv, m, n, jmin));
 }
 
 void deletehorizontal(Mat& I, vector<int> seamh, int m, int n){
@@ -180,7 +176,7 @@ void deletemultiplehorizontal(int k , Mat&Energie, Mat& Mh, Mat& Ix, Mat& Iy, Ma
 	for(int i = 0 ; i<k; i++){
 		sobel(I,Ix,Iy,Energie,m-i,n);
 		energymatrixhorizontal(Energie,Mh,m-i,n);
-		seam = findseamhorizontal(I,Mh,m-i,n);
+		seam = findhminimalseam(I,Mh,m-i,n);
 		deletehorizontal(I,seam,m-i,n);
 	}
 }
@@ -191,9 +187,13 @@ void deletemultiplevertical(int k , Mat&Energie, Mat& Mv, Mat& Ix, Mat& Iy, Mat&
 	for(int i = 0 ; i<k; i++){
 		sobel(I,Ix,Iy,Energie,m,n-i);
 		energymatrixvertical(Energie,Mv,m,n-i);
-		seam = findseamvertical(I,Mv,m,n-i);
+		seam = findvminimalseam(I,Mv,m,n-i);
 		deletevertical(I,seam,m,n-i);
 	}
+}
+
+void addmultiplehorizontal(int k, Mat& E, Mat& I, Mat& J) { //J will contain the result matrix, it should be at least as large and k rows wider.
+	
 }
 
 void deletemultipleverticalthenhorizontal(int p, int q , Mat&Energie, Mat& Mv, Mat& Mh, Mat& Ix, Mat& Iy, Mat& I){
@@ -203,13 +203,13 @@ void deletemultipleverticalthenhorizontal(int p, int q , Mat&Energie, Mat& Mv, M
 	for(int i = 0 ; i<q; i++){
 		sobel(I,Ix,Iy,Energie,m,n-i);
 		energymatrixvertical(Energie,Mv,m,n-i);
-		seam = findseamvertical(I,Mv,m,n-i);
+		seam = findvminimalseam(I,Mv,m,n-i);
 		deletevertical(I,seam,m,n-i);
 	}
 	for(int i = 0 ; i<p; i++){
 		sobel(I,Ix,Iy,Energie,m-i,n);
 		energymatrixhorizontal(Energie,Mh,m-i,n);
-		seam = findseamhorizontal(I,Mh,m-i,n);
+		seam = findhminimalseam(I,Mh,m-i,n);
 		deletehorizontal(I,seam,m-i,n);
 	}
 }
