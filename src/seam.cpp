@@ -13,7 +13,7 @@ using namespace cv;
 void sobel(const Mat& Ic, Mat& Ix, Mat& Iy, Mat& G1, int m, int n)
 {
 	Mat I;
-	cvtColor(Ic, I, CV_BGR2GRAY);
+	cvtColor(Ic, I, COLOR_BGR2GRAY);
 	
 	//int m = I.rows, n = I.cols;
 	Ix = Mat(m, n, CV_32F);
@@ -217,7 +217,7 @@ void deletemultipleverticalthenhorizontal(int p, int q , Mat&Energie, Mat& Mv, M
 
 int main() {
 
-	Image<Vec3b> I= Image<Vec3b>(imread("../temple.jpg"));
+	Image<Vec3b> I= Image<Vec3b>(imread("../../../test_images/temple.jpg"));
 	
 	Mat Iref(I);
 
@@ -226,8 +226,8 @@ int main() {
 	int m = I.rows;
 	int n = I.cols;
 
-	int p = 100;
-	int q = 50;
+	int p = 10;
+	int q = 5;
 
 	Mat Energie;
 	Mat Ix,Iy;
