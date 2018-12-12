@@ -1,7 +1,6 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <iostream>
 #include <fstream>
-#include <list>
 #include <math.h>  
 
 #include "image.h"
@@ -192,8 +191,65 @@ void deletemultiplevertical(int k , Mat&Energie, Mat& Mv, Mat& Ix, Mat& Iy, Mat&
 	}
 }
 
-void addmultiplehorizontal(int k, Mat& E, Mat& I, Mat& J) { //J will contain the result matrix, it should be at least as large and k rows wider.
-	
+bool lexicographicorder(tuple<float,int> fst, tuple<float,int> snd) { //create an utils.cpp file to clarify ?
+	if (get<0>(fst) < get<0>(snd)) {
+		return true;
+	}
+	else if (get<0>(fst) == get<0>(snd)) {
+		return (get<1>(fst) < get<1>(snd));
+	}
+	else return false;
+}
+
+bool sndorder (tuple<float,int> fst, tuple<float,int> snd) { //idem
+	if (get<1>(fst) < get<1>(snd)) {
+		return true;
+	}
+	else return false;
+}
+
+void addmultiplehorizontal(int k, int m, int n, Mat& Mh, Mat& I, Mat& Energie, Mat& Ix, Mat& Iy, Mat& J) { //J will contain the result matrix, it should be at least as large and k rows wider. Mh peut déjà avoir été obtenue avec energymatrixhorizontal
+	sobel(I,Ix,Iy,Energie,m,n);
+	energymatrixhorizontal(Energie,Mh,m,n);
+	vector<tuple<float, int>> last_column;
+	printf("taille de I: %d, %d", m, n);
+	printf("taille de J: %d, %d\n", J.rows, J.cols);
+	printf("taille de Mh: %d, %d\n", Mh.rows, Mh.cols);
+	for(int i = 0; i < m ; i++){
+		last_column.push_back(make_tuple(Mh.at<float>(i,n-1), i));
+	}
+	std::sort(last_column.begin(), last_column.begin()+last_column.size(), lexicographicorder);
+	printf("sorted\n");
+	vector<vector<int>> seams;
+	vector<int> to_add;
+	for (int o = 0; o < k; o++) {
+		to_add.push_back(get<1>(last_column[o]));
+	}
+	printf("selected\n");
+	std::sort(to_add.begin(), to_add.begin()+k); //normalement deux seams ne peuvent pas se croiser (sinon ils suivent la même fin) et donc normalement l'ordre est conservé à chaque ligne (j'espère sinon ça complique)
+	printf("sorted back\n");
+	for (int o = 0; o < k; o++) {
+		seams.push_back(findseamhorizontal(I, Mh, m, n, to_add[o])); //on peut donc les mettre dans l'ordre logique et comme ça les ajouter dans l'ordre ce qui permet de ne pas tout décaler k fois
+		printf("to add in row 10 : %d", seams[o][10]);
+	}
+	printf("seams found\n");
+	for(int j = 0; j < n; j++) { //on ajoute k lignes donc colonne par colonne il faut ajouter k pixels
+		printf("started iteration%d", j);
+		int added = 0; //le nombre déjà ajouté qui correspond au décalage
+		int begin = 0; //le premier indice quand on a ajouté added pixels sur la colonne j
+		while (added != k) {
+			//printf("already added %d", added);
+			//printf("from %d to %d", begin, seams[j][added]);
+			//ici on a un problème, en gros tous les seams[j][added] sont égaux (pour un même added)
+			for(int i = begin; i < seams[j][added]; i++) { //les indices ça va ête un bordel à débugger
+				J.at<Vec3b>(i+added, j) = I.at<Vec3b>(i, j);
+			}
+			J.at<Vec3b>(seams[j][added]+added, j) = I.at<Vec3b>(seams[j][added], j);
+			begin = seams[j][added];
+			added ++;
+		}
+	}
+	printf("function ended\n");
 }
 
 void deletemultipleverticalthenhorizontal(int p, int q , Mat&Energie, Mat& Mv, Mat& Mh, Mat& Ix, Mat& Iy, Mat& I){
@@ -217,6 +273,7 @@ void deletemultipleverticalthenhorizontal(int p, int q , Mat&Energie, Mat& Mv, M
 
 int main() {
 
+	//INITIALISATION (IMAGE ET PARAMÈTRES)
 	Image<Vec3b> I= Image<Vec3b>(imread("../../../test_images/temple.jpg"));
 	
 	Mat Iref(I);
@@ -243,15 +300,22 @@ int main() {
 
 	//cout << "Mh = "<< endl << " "  << Mh << endl << endl;
 
+	//SUPPRESSION DE LIGNES/COLONNES
 	Mat Mh;
 	//deletemultiplehorizontal(q,Energie,Mh,Ix,Iy,I);
 	Mat Mv;
 	//deletemultiplevertical(50,Energie,Mv,Ix,Iy,I);
 	deletemultipleverticalthenhorizontal(p,q,Energie,Mv,Mh,Ix,Iy,I);
 
-	Mat roi(I, Rect(0,0,n-q,m-p));
+	//INSERTION DE LIGNES
+	/*Mat J;
+	J = Mat(m+20, n, CV_8U);
+	addmultiplehorizontal(20, m, n, Mh, I, Energie, Ix, Iy, J);*/
 
-	imshow("roi",roi);
+	//Mat roi(I, Rect(0,0,n-q,m-p));
+	imshow("deleted", J);
+
+	//imshow("roi",roi);
 	waitKey(0);
 	return 0;
 }
