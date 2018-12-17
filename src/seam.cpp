@@ -191,65 +191,48 @@ void deletemultiplevertical(int k , Mat&Energie, Mat& Mv, Mat& Ix, Mat& Iy, Mat&
 	}
 }
 
-bool lexicographicorder(tuple<float,int> fst, tuple<float,int> snd) { //create an utils.cpp file to clarify ?
-	if (get<0>(fst) < get<0>(snd)) {
-		return true;
-	}
-	else if (get<0>(fst) == get<0>(snd)) {
-		return (get<1>(fst) < get<1>(snd));
-	}
-	else return false;
-}
-
-bool sndorder (tuple<float,int> fst, tuple<float,int> snd) { //idem
-	if (get<1>(fst) < get<1>(snd)) {
-		return true;
-	}
-	else return false;
-}
-
-void addmultiplehorizontal(int k, int m, int n, Mat& Mh, Mat& I, Mat& Energie, Mat& Ix, Mat& Iy, Mat& J) { //J will contain the result matrix, it should be at least as large and k rows wider. Mh peut déjà avoir été obtenue avec energymatrixhorizontal
-	sobel(I,Ix,Iy,Energie,m,n);
-	energymatrixhorizontal(Energie,Mh,m,n);
-	vector<tuple<float, int>> last_column;
-	printf("taille de I: %d, %d", m, n);
-	printf("taille de J: %d, %d\n", J.rows, J.cols);
-	printf("taille de Mh: %d, %d\n", Mh.rows, Mh.cols);
-	for(int i = 0; i < m ; i++){
-		last_column.push_back(make_tuple(Mh.at<float>(i,n-1), i));
-	}
-	std::sort(last_column.begin(), last_column.begin()+last_column.size(), lexicographicorder);
-	printf("sorted\n");
+void addmultiplehorizontal(int k, int m, int n, Mat& Mh, Mat& I, Mat& Energie, Mat& Ix, Mat& Iy, Mat& J) { //J will contain the result matrix, it should be at least as large and k rows wider.
+	printf("beginning of function\n");
 	vector<vector<int>> seams;
-	vector<int> to_add;
+	vector<vector<Vec3b>> values;
 	for (int o = 0; o < k; o++) {
-		to_add.push_back(get<1>(last_column[o]));
-	}
-	printf("selected\n");
-	std::sort(to_add.begin(), to_add.begin()+k); //normalement deux seams ne peuvent pas se croiser (sinon ils suivent la même fin) et donc normalement l'ordre est conservé à chaque ligne (j'espère sinon ça complique)
-	printf("sorted back\n");
-	for (int o = 0; o < k; o++) {
-		seams.push_back(findseamhorizontal(I, Mh, m, n, to_add[o])); //on peut donc les mettre dans l'ordre logique et comme ça les ajouter dans l'ordre ce qui permet de ne pas tout décaler k fois
-		printf("to add in row 10 : %d", seams[o][10]);
-	}
-	printf("seams found\n");
-	for(int j = 0; j < n; j++) { //on ajoute k lignes donc colonne par colonne il faut ajouter k pixels
-		printf("started iteration%d", j);
-		int added = 0; //le nombre déjà ajouté qui correspond au décalage
-		int begin = 0; //le premier indice quand on a ajouté added pixels sur la colonne j
-		while (added != k) {
-			//printf("already added %d", added);
-			//printf("from %d to %d", begin, seams[j][added]);
-			//ici on a un problème, en gros tous les seams[j][added] sont égaux (pour un même added)
-			for(int i = begin; i < seams[j][added]; i++) { //les indices ça va ête un bordel à débugger
-				J.at<Vec3b>(i+added, j) = I.at<Vec3b>(i, j);
+		printf("iteration %d\n", o);
+		sobel(I,Ix,Iy,Energie,m-o,n);
+		energymatrixhorizontal(Energie,Mh,m-o,n);
+		vector<int> minseam = findhminimalseam(I, Mh, m-o, n);
+		vector<Vec3b> valuesofseam;
+		for (int i = 0; i < n; i++) {
+			valuesofseam.push_back(I.at<Vec3b>(minseam[i],i));
+			for (int j = 0; j < o; j++) {
+				if(seams[j][i] > minseam[i]) { //actualisation des indices
+					seams[j][i]++; //Est-ce que c'est normal que mes indices soient inversés ? est-ce que j'ai fait encore des erreurs d'indices ?
+				}
 			}
-			J.at<Vec3b>(seams[j][added]+added, j) = I.at<Vec3b>(seams[j][added], j);
-			begin = seams[j][added];
-			added ++;
+		}
+		seams.push_back(minseam);
+		values.push_back(valuesofseam);
+		deletehorizontal(I, minseam, m-o, n);
+	}
+	printf("end of deleting\n");
+	for (int i = 0; i < m-k; i++) { //premier copiage
+		for (int j = 0; j < n; j++) {
+			J.at<Vec3b>(i,j) = I.at<Vec3b>(i,j);
 		}
 	}
-	printf("function ended\n");
+	printf("beginning of adding again");
+	for (int o = k-1; o >= 0; o--) {
+		for (int i= 0; i < n; i++) {
+			printf("adding %f in place %d", values[o][i], seams[o][i]);
+			int begin = seams[o][i];
+			for (int j = m-o-2; j > begin-1; j--) {
+				printf("i'm copying row %d\n", j);
+				J.at<Vec3b>(j+2,i) = J.at<Vec3b>(j,i); 
+			}
+			J.at<Vec3b>(begin, i) = values[o][i];
+			J.at<Vec3b>(begin+1,i) = values[o][i];
+		}
+	}
+	printf("end of function");
 }
 
 void deletemultipleverticalthenhorizontal(int p, int q , Mat&Energie, Mat& Mv, Mat& Mh, Mat& Ix, Mat& Iy, Mat& I){
@@ -305,15 +288,15 @@ int main() {
 	//deletemultiplehorizontal(q,Energie,Mh,Ix,Iy,I);
 	Mat Mv;
 	//deletemultiplevertical(50,Energie,Mv,Ix,Iy,I);
-	deletemultipleverticalthenhorizontal(p,q,Energie,Mv,Mh,Ix,Iy,I);
+	//deletemultipleverticalthenhorizontal(p,q,Energie,Mv,Mh,Ix,Iy,I);
 
 	//INSERTION DE LIGNES
-	/*Mat J;
-	J = Mat(m+20, n, CV_8U);
-	addmultiplehorizontal(20, m, n, Mh, I, Energie, Ix, Iy, J);*/
+	Mat J;
+	J = Mat(m+20, n, CV_8UC3);
+	addmultiplehorizontal(20, m, n, Mh, I, Energie, Ix, Iy, J);
 
 	//Mat roi(I, Rect(0,0,n-q,m-p));
-	imshow("deleted", J);
+	imshow("added", J);
 
 	//imshow("roi",roi);
 	waitKey(0);
