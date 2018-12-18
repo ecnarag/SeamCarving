@@ -222,10 +222,8 @@ void addmultiplehorizontal(int k, int m, int n, Mat& Mh, Mat& I, Mat& Energie, M
 	printf("beginning of adding again");
 	for (int o = k-1; o >= 0; o--) {
 		for (int i= 0; i < n; i++) {
-			printf("adding %f in place %d", values[o][i], seams[o][i]);
 			int begin = seams[o][i];
-			for (int j = m-o-2; j > begin-1; j--) {
-				printf("i'm copying row %d\n", j);
+			for (int j = m+k-2*o-3; j > begin-1; j--) {
 				J.at<Vec3b>(j+2,i) = J.at<Vec3b>(j,i); 
 			}
 			J.at<Vec3b>(begin, i) = values[o][i];
@@ -292,8 +290,8 @@ int main() {
 
 	//INSERTION DE LIGNES
 	Mat J;
-	J = Mat(m+20, n, CV_8UC3);
-	addmultiplehorizontal(20, m, n, Mh, I, Energie, Ix, Iy, J);
+	J = Mat(m+200, n, CV_8UC3);
+	addmultiplehorizontal(200, m, n, Mh, I, Energie, Ix, Iy, J);
 
 	//Mat roi(I, Rect(0,0,n-q,m-p));
 	imshow("added", J);
