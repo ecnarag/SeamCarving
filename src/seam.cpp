@@ -24,7 +24,11 @@ void sobel(const Mat& Ic, Mat& Ix, Mat& Iy, Mat& G1, int m, int n)
 	Sobel(I,Iy,CV_32F,0,1);
 
 
+	printf("sobel size: %d %d", m, n);
 	for (int i = 0; i < m; i++) {
+		if (m == 644) {
+			printf("%d",i);
+		}
 		for (int j = 0; j < n; j++) {
 			//float?
 			//cout << "ix = "<< endl << Ix.at<float>(i,j) << endl;
@@ -231,15 +235,11 @@ void addmultiplevertical(int k, int m, int n, Mat& Mv, Mat& I, Mat& Energie, Mat
 	vector<vector<int>> seams;
 	vector<vector<Vec3b>> values;
 	for (int o = 0; o < k; o++) {
-		printf("iteration %d", o);
-		sobel(I,Ix,Iy,Energie,m,n-o);
+		sobel(I,Ix,Iy,Energie,m,n-o); 
 		energymatrixvertical(Energie,Mv,m,n-o);
-		printf("blibli");
 		vector<int> minseam = findvminimalseam(I, Mv, m, n-o);
 		vector<Vec3b> valuesofseam;
-		printf("bla");
 		for (int j = 0; j < m; j++) {
-			printf("blu %d", j);
 			valuesofseam.push_back(I.at<Vec3b>(j, minseam[j]));
 			for (int i = 0; i < o; i++) {
 				if(seams[i][j] > minseam[j]) {
@@ -247,18 +247,15 @@ void addmultiplevertical(int k, int m, int n, Mat& Mv, Mat& I, Mat& Energie, Mat
 				}
 			}
 		}
-		printf("bleh");
 		seams.push_back(minseam);
 		values.push_back(valuesofseam);
 		deletevertical(I, minseam, m, n-o);
 	}
-	printf("ok till here");
 	for (int j = 0; j < n-k; j++) {
 		for (int i = 0; i < m; i++) {
 			J.at<Vec3b>(i,j) = I.at<Vec3b>(i,j);
 		}
 	}
-	printf("also copied");
 	for (int o = k-1; o >= 0; o--) {
 		for (int i= 0; i < m; i++) {
 			int begin = seams[o][i];
@@ -270,6 +267,12 @@ void addmultiplevertical(int k, int m, int n, Mat& Mv, Mat& I, Mat& Energie, Mat
 		}
 	}
 }
+
+void addhorizontalandvertical(int k, int l, int r, int c, Mat& Mh, Mat& Mv, Mat& I, Mat& Energie, Mat& Ix, Mat& Iy, Mat& J) {
+	J = Mat(r+k, c+l, CV_8UC3);
+	addmultiplehorizontal(k, r, c, Mh, I, Energie, Ix, Iy, J);
+	addmultiplevertical(l, r+k, c, Mv, J, Energie, Ix, Iy, J);
+}	
 
 void deletemultipleverticalthenhorizontal(int p, int q , Mat&Energie, Mat& Mv, Mat& Mh, Mat& Ix, Mat& Iy, Mat& I){
 	int m = I.rows;
@@ -288,7 +291,6 @@ void deletemultipleverticalthenhorizontal(int p, int q , Mat&Energie, Mat& Mv, M
 		deletehorizontal(I,seam,m-i,n);
 	}
 }
-
 
 int main() {
 
@@ -326,13 +328,9 @@ int main() {
 	//deletemultiplevertical(50,Energie,Mv,Ix,Iy,I);
 	//deletemultipleverticalthenhorizontal(p,q,Energie,Mv,Mh,Ix,Iy,I);
 
-	//INSERTION DE LIGNES
-	Mat J;
-	J = Mat(r+20, c, CV_8UC3);
-	addmultiplehorizontal(20, r, c, Mh, I, Energie, Ix, Iy, J);
-	addmultiplevertical(20, r+20, c, Mv, I, Energie, Ix, Iy, J);
-
 	//Mat roi(I, Rect(0,0,n-q,m-p));
+	Mat J;
+	addhorizontalandvertical(50, 50, r, c, Mh, Mv, I, Energie, Ix, Iy, J);
 	imshow("added", J);
 
 	//imshow("roi",roi);
