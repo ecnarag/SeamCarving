@@ -8,6 +8,43 @@
 using namespace std;
 using namespace cv;
 
+static int mouse_x = -1;
+static int mouse_y = -1;
+static int etat = 0;
+
+void on_mouse( int evt, int x, int y, int d, void *ptr )
+{
+	Mat* wgt = (Mat*) ptr;
+	int m = (*wgt).rows;
+
+	if (d == EVENT_LBUTTONDOWN) 
+    	{
+		(*wgt).at<float>(y,x) = +1.;
+		cout << "lbut avec" << y << "et" << x;
+		mouse_x = x;
+		mouse_y = y;
+		etat = 1;
+		}
+		else
+		{
+			if (d == EVENT_RBUTTONDOWN) 
+    		{
+				(*wgt).at<float>(y,x) = -1.;
+				mouse_x = x;
+				mouse_y = y;
+				etat = 2;
+				cout << "rbut avec" << y << "et" << x;
+			}
+			else
+			{
+				if(etat != 0)
+				{
+					etat = 0;
+				}
+			}
+		}
+	
+}
 
 // Gradient (and derivatives), Sobel denoising
 void sobel(const Mat& Ic, Mat& Ix, Mat& Iy, Mat& G1, int m, int n)
@@ -24,24 +61,33 @@ void sobel(const Mat& Ic, Mat& Ix, Mat& Iy, Mat& G1, int m, int n)
 	Sobel(I,Iy,CV_32F,0,1);
 
 
-	printf("sobel size: %d %d", m, n);
 	for (int i = 0; i < m; i++) {
-		if (m == 644) {
-			printf("%d",i);
-		}
 		for (int j = 0; j < n; j++) {
 			//float?
 			//cout << "ix = "<< endl << Ix.at<float>(i,j) << endl;
 			//cout << "iy = "<< endl << Iy.at<float>(i,j) << endl;
-			G1.at<float>(i,j) = ( fabs(Ix.at<float>(i,j)) + fabs(Iy.at<float>(i,j)) ) / 2;	
 			
+			G1.at<float>(i,j) = ( fabs(Ix.at<float>(i,j)) + fabs(Iy.at<float>(i,j)) ) / 2;	
+			//cout << "G1 = "<< endl << G1.at<float>(i,j) << endl;
 		}
 	}
 
 	//cout << "g1 = "<< endl << G1 << endl;
 }
 
-
+void weightenergy(Mat& energy, Mat& zones, int m, int n){
+		for (int i = 0; i < m; i++) {
+			for (int j = 0; j < n; j++) {
+				if(zones.at<float>(i,j)==1.){
+					energy.at<float>(i,j) = energy.at<float>(i,j) + 500;
+				}
+				if(zones.at<float>(i,j)==-1.){
+					//energy.at<float>(i,j) = -1000 * energy.at<float>(i,j);
+					energy.at<float>(i,j) = -50;
+				}
+			}
+		}
+}
 
 //Energy matrix to get the seams
 void energymatrixhorizontal(const Mat& E, Mat& Ih, int m, int n)
@@ -89,6 +135,7 @@ void energymatrixvertical(const Mat& E, Mat& Iv, int m, int n)
 		}
 	}
 }
+
 
 
 vector <int> findseamhorizontal (const Mat& I, Mat& Mh, int m, int n, int i) {
@@ -171,18 +218,43 @@ void deletevertical(Mat& I, vector<int> seamv, int m, int n){
 	}
 }
 
-void deletemultiplehorizontal(int k , Mat&Energie, Mat& Mh, Mat& Ix, Mat& Iy, Mat& I){
+void deletehorizontalzones(Mat& I, vector<int> seamv, int m, int n){
+	//int m = I.rows;
+	//int n = I.cols;
+
+	for(int j = 0; j < n; j++ ){
+		for(int i = seamv[j]; i < m - 1; i++){
+			I.at<float>(i,j) = I.at<float>(i+1,j);
+		}
+		I.at<float>(m-1,j) = 0;
+	}
+}
+
+void deleteverticalzones(Mat& I, vector<int> seamv, int m, int n){
+	//int m = I.rows;
+	//int n = I.cols;
+
+	for(int i = 0; i < m; i++ ){
+		for(int j = seamv[i]; j < n - 1; j++){
+			I.at<float>(i,j) = I.at<float>(i,j+1);
+		}
+		I.at<float>(i,n-1) = 0;
+	}
+}
+
+void deletemultiplehorizontal(int k , Mat&Energie, Mat& zones, Mat& Mh, Mat& Ix, Mat& Iy, Mat& I){
 	int m = I.rows;
 	int n = I.cols;
 	vector<int> seam;
 	for(int i = 0 ; i<k; i++){
 		sobel(I,Ix,Iy,Energie,m-i,n);
 		energymatrixhorizontal(Energie,Mh,m-i,n);
-		seam = findhminimalseam(I,Mh,m-i,n);
+		seam = findhminimalseam(I,Mh,m-i,n);		
 		deletehorizontal(I,seam,m-i,n);
+		deleteverticalzones(zones,seam,m-i,n);
 	}
 }
-void deletemultiplevertical(int k , Mat&Energie, Mat& Mv, Mat& Ix, Mat& Iy, Mat& I){
+void deletemultiplevertical(int k , Mat&Energie, Mat& zones, Mat& Mv, Mat& Ix, Mat& Iy, Mat& I){
 	int m = I.rows;
 	int n = I.cols;
 	vector<int> seam;
@@ -191,8 +263,60 @@ void deletemultiplevertical(int k , Mat&Energie, Mat& Mv, Mat& Ix, Mat& Iy, Mat&
 		energymatrixvertical(Energie,Mv,m,n-i);
 		seam = findvminimalseam(I,Mv,m,n-i);
 		deletevertical(I,seam,m,n-i);
+		deleteverticalzones(zones,seam,m,n-i);
 	}
 }
+
+void deletemultipleverticalthenhorizontal(int p, int q , Mat&Energie, Mat& zones, Mat& Mv, Mat& Mh, Mat& Ix, Mat& Iy, Mat& I){
+	int m = I.rows;
+	int n = I.cols;
+	vector<int> seam;
+	bool vertical = true;
+	int i = 0;
+	int j = 0;
+
+	while(i<q && j<p){
+		sobel(I,Ix,Iy,Energie,m-j,n-i);
+		weightenergy(Energie,zones,m-j,n-i);
+		if(vertical){
+			energymatrixvertical(Energie,Mv,m-j,n-i);
+			seam = findvminimalseam(I,Mv,m-j,n-i);
+			deletevertical(I,seam,m-j,n-i);
+			deleteverticalzones(zones,seam,m-j,n-i);
+			vertical = false;
+			i++;
+			}
+		else{
+			energymatrixhorizontal(Energie,Mh,m-j,n-i);
+			seam = findhminimalseam(I,Mv,m-j,n-i);
+			deletehorizontal(I,seam,m-j,n-i);
+			deletehorizontalzones(zones,seam,m-j,n-i);
+			vertical = true;
+			j++;
+			}
+		//cout << "p " << p << " +q " << q << + " +i " << i << " +j " << j;
+		}
+	if (i == q) {
+		while (j < p) {
+			energymatrixhorizontal(Energie, Mh, m - j, n - i);
+			seam = findhminimalseam(I, Mv, m - j, n - i);
+			deletehorizontal(I, seam, m - j, n - i);
+			deletehorizontalzones(zones, seam, m - j, n - i);
+			j++;
+		}
+	}
+	if (j == p) {
+		while (i < q) {
+			energymatrixvertical(Energie, Mv, m - j, n - i);
+			seam = findvminimalseam(I, Mv, m - j, n - i);
+			deletevertical(I, seam, m - j, n - i);
+			deleteverticalzones(zones, seam, m - j, n - i);
+			i++;
+		}
+	}
+	
+}
+
 
 void addmultiplehorizontal(int k, int m, int n, Mat& Mh, Mat& I, Mat& Energie, Mat& Ix, Mat& Iy, Mat& J) { 
 	vector<vector<int>> seams;
@@ -226,7 +350,24 @@ void addmultiplehorizontal(int k, int m, int n, Mat& Mh, Mat& I, Mat& Energie, M
 				J.at<Vec3b>(j+2,i) = J.at<Vec3b>(j,i); 
 			}
 			J.at<Vec3b>(begin, i) = values[o][i];
-			J.at<Vec3b>(begin+1,i) = values[o][i];
+			J.at<Vec3b>(begin + 1, i) = values[o][i];
+		}
+	}
+	for (int o = k - 1; o >= 0; o--) {
+		for (int i = 0; i < n; i++) {
+			int begin = seams[o][i];
+			if (begin > 0) {
+				J.at<Vec3b>(begin + 2 * o, i) = Vec3b(
+					(J.at<Vec3b>(begin + 2 * o, i).val[0] + J.at<Vec3b>(begin + 2 * o - 1, i).val[0]) / 2,
+					(J.at<Vec3b>(begin + 2 * o, i).val[1] + J.at<Vec3b>(begin + 2 * o - 1, i).val[1]) / 2,
+					(J.at<Vec3b>(begin + 2 * o, i).val[2] + J.at<Vec3b>(begin + 2 * o - 1, i).val[2]) / 2);
+			}
+			if (begin + 2 * o + 2 <= m + k) {
+				J.at<Vec3b>(begin + 2 * o + 1, i) = Vec3b(
+					(J.at<Vec3b>(begin + 2 * o + 1, i).val[0] + J.at<Vec3b>(begin + 2 * o + 2, i).val[0]) / 2,
+					(J.at<Vec3b>(begin + 2 * o + 1, i).val[1] + J.at<Vec3b>(begin + 2 * o + 2, i).val[1]) / 2,
+					(J.at<Vec3b>(begin + 2 * o + 1, i).val[2] + J.at<Vec3b>(begin + 2 * o + 2, i).val[2]) / 2);
+			}
 		}
 	}
 }
@@ -260,10 +401,30 @@ void addmultiplevertical(int k, int m, int n, Mat& Mv, Mat& I, Mat& Energie, Mat
 		for (int i= 0; i < m; i++) {
 			int begin = seams[o][i];
 			for (int j = n+k-2*o-3; j > begin-1; j--) {
-				J.at<Vec3b>(i, j+2) = J.at<Vec3b>(i,j); 
+				J.at<Vec3b>(i,j+2) = J.at<Vec3b>(i,j); 
 			}
-			J.at<Vec3b>(i,begin) = values[o][i];
-			J.at<Vec3b>(i,begin+1) = values[o][i];
+			
+			J.at<Vec3b>(i, begin) = values[o][i];
+			J.at<Vec3b>(i, begin + 1) = values[o][i];
+		
+		}
+	}
+	for (int o = k - 1; o >= 0; o--) {
+		for (int i = 0; i < m; i++) {
+			int begin = seams[o][i];
+
+			if (begin > 0) {
+				J.at<Vec3b>(i, begin + 2*o) = Vec3b(
+					(J.at<Vec3b>(i, begin + 2 * o).val[0] + J.at<Vec3b>(i, begin + 2 * o - 1).val[0]) / 2,
+					(J.at<Vec3b>(i, begin + 2 * o).val[1] + J.at<Vec3b>(i, begin + 2 * o - 1).val[1]) / 2,
+					(J.at<Vec3b>(i, begin + 2 * o).val[2] + J.at<Vec3b>(i, begin + 2 * o - 1).val[2]) / 2);
+			}
+			if (begin + 2 + 2 * o <= n + k) {
+				J.at<Vec3b>(i, begin + 2 * o + 1) = Vec3b(
+					(J.at<Vec3b>(i, begin + 2 * o + 1).val[0] + J.at<Vec3b>(i, begin + 2 * o + 2).val[0]) / 2,
+					(J.at<Vec3b>(i, begin + 2 * o + 1).val[1] + J.at<Vec3b>(i, begin + 2 * o + 2).val[1]) / 2,
+					(J.at<Vec3b>(i, begin + 2 * o + 1).val[2] + J.at<Vec3b>(i, begin + 2 * o + 2).val[2]) / 2);
+			}
 		}
 	}
 }
@@ -274,38 +435,27 @@ void addhorizontalandvertical(int k, int l, int r, int c, Mat& Mh, Mat& Mv, Mat&
 	addmultiplevertical(l, r+k, c, Mv, J, Energie, Ix, Iy, J);
 }	
 
-void deletemultipleverticalthenhorizontal(int p, int q , Mat&Energie, Mat& Mv, Mat& Mh, Mat& Ix, Mat& Iy, Mat& I){
-	int m = I.rows;
-	int n = I.cols;
-	vector<int> seam;
-	for(int i = 0 ; i<q; i++){
-		sobel(I,Ix,Iy,Energie,m,n-i);
-		energymatrixvertical(Energie,Mv,m,n-i);
-		seam = findvminimalseam(I,Mv,m,n-i);
-		deletevertical(I,seam,m,n-i);
-	}
-	for(int i = 0 ; i<p; i++){
-		sobel(I,Ix,Iy,Energie,m-i,n);
-		energymatrixhorizontal(Energie,Mh,m-i,n);
-		seam = findhminimalseam(I,Mh,m-i,n);
-		deletehorizontal(I,seam,m-i,n);
-	}
-}
+
 
 int main() {
 
-	//INITIALISATION (IMAGE ET PARAMÈTRES)
 	Image<Vec3b> I= Image<Vec3b>(imread("../../../test_images/temple.jpg"));
 	
-	Mat Iref(I);
+	printf("size of i %d %d", I.rows, I.cols);
+	Mat Iref = I.clone();
 
-	imshow("Iref",Iref);
+	printf("size of iref %d %d", Iref.rows, Iref.cols);
+	Mat Iref2 = I.clone();
 
-	int r = I.rows;
-	int c = I.cols;
+	Mat Iref3 = I.clone();
+	
+	int m = I.rows;
+	int n = I.cols;
 
-	int p = 10;
-	int q = 5;
+	int p = 100;
+	int q = 50;
+
+	Mat zones = Mat(m, n, CV_32F);
 
 	Mat Energie;
 	Mat Ix,Iy;
@@ -321,19 +471,59 @@ int main() {
 
 	//cout << "Mh = "<< endl << " "  << Mh << endl << endl;
 
-	//SUPPRESSION DE LIGNES/COLONNES
 	Mat Mh;
 	//deletemultiplehorizontal(q,Energie,Mh,Ix,Iy,I);
 	Mat Mv;
 	//deletemultiplevertical(50,Energie,Mv,Ix,Iy,I);
-	//deletemultipleverticalthenhorizontal(p,q,Energie,Mv,Mh,Ix,Iy,I);
 
-	//Mat roi(I, Rect(0,0,n-q,m-p));
+	namedWindow("Choisir les zones",1);
+
+	imshow("Choisir les zones",Iref);
+
+	setMouseCallback("Choisir les zones", on_mouse, &zones);
+
+	while(waitKey(20) != 27){
+		imshow("Choisir les zones",Iref);
+		//cout << "Sorti de waitKey";
+		if(etat==1){
+			circle(Iref, Point(mouse_x, mouse_y), 2, Scalar(0,255,0));
+			}
+		if(etat==2){
+			circle(Iref, Point(mouse_x, mouse_y), 2, Scalar(255,0,0));
+			}
+/* 			for(int j = 0; j < n; j++ ){
+				for(int i = 0; i < m; i++){
+					if(zones.at<float>(i,j) == 1.){
+						Iref.at<Vec3b>(i,j) = Vec3b(255,0,0);
+						}
+					if(zones.at<float>(i,j) == -1.){
+						Iref.at<Vec3b>(i,j) = Vec3b(0,255,0);
+						}
+					}
+				} */
+	}
+	cout<< "Sorti du while";
+
+
+
+	deletemultipleverticalthenhorizontal(p,q,Energie,zones,Mv,Mh,Ix,Iy,I);
+
+	Mat roi(I, Rect(0,0,n-q,m-p));
+	imshow("roi",roi);
+
+	
+	//INSERTION DE LIGNES
+
 	Mat J;
-	addhorizontalandvertical(50, 50, r, c, Mh, Mv, I, Energie, Ix, Iy, J);
+	int r = m-p;
+	int c = n-q;
+	cout << "r " << r;
+	cout << "c " << c;
+	addhorizontalandvertical(100, 50, r, c, Mh, Mv, I, Energie, Ix, Iy, J);
 	imshow("added", J);
+	//Mat roi(I, Rect(0,0,n-q,m-p));
 
-	//imshow("roi",roi);
+
 	waitKey(0);
 	return 0;
 }
