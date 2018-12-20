@@ -29,7 +29,6 @@ void sobel(const Mat& Ic, Mat& Ix, Mat& Iy, Mat& G1, int m, int n)
 			//float?
 			//cout << "ix = "<< endl << Ix.at<float>(i,j) << endl;
 			//cout << "iy = "<< endl << Iy.at<float>(i,j) << endl;
-			
 			G1.at<float>(i,j) = ( fabs(Ix.at<float>(i,j)) + fabs(Iy.at<float>(i,j)) ) / 2;	
 			
 		}
@@ -191,12 +190,10 @@ void deletemultiplevertical(int k , Mat&Energie, Mat& Mv, Mat& Ix, Mat& Iy, Mat&
 	}
 }
 
-void addmultiplehorizontal(int k, int m, int n, Mat& Mh, Mat& I, Mat& Energie, Mat& Ix, Mat& Iy, Mat& J) { //J will contain the result matrix, it should be at least as large and k rows wider.
-	printf("beginning of function\n");
+void addmultiplehorizontal(int k, int m, int n, Mat& Mh, Mat& I, Mat& Energie, Mat& Ix, Mat& Iy, Mat& J) { 
 	vector<vector<int>> seams;
 	vector<vector<Vec3b>> values;
 	for (int o = 0; o < k; o++) {
-		printf("iteration %d\n", o);
 		sobel(I,Ix,Iy,Energie,m-o,n);
 		energymatrixhorizontal(Energie,Mh,m-o,n);
 		vector<int> minseam = findhminimalseam(I, Mh, m-o, n);
@@ -204,8 +201,8 @@ void addmultiplehorizontal(int k, int m, int n, Mat& Mh, Mat& I, Mat& Energie, M
 		for (int i = 0; i < n; i++) {
 			valuesofseam.push_back(I.at<Vec3b>(minseam[i],i));
 			for (int j = 0; j < o; j++) {
-				if(seams[j][i] > minseam[i]) { //actualisation des indices
-					seams[j][i]++; //Est-ce que c'est normal que mes indices soient inversés ? est-ce que j'ai fait encore des erreurs d'indices ?
+				if(seams[j][i] > minseam[i]) {
+					seams[j][i]++;
 				}
 			}
 		}
@@ -213,13 +210,11 @@ void addmultiplehorizontal(int k, int m, int n, Mat& Mh, Mat& I, Mat& Energie, M
 		values.push_back(valuesofseam);
 		deletehorizontal(I, minseam, m-o, n);
 	}
-	printf("end of deleting\n");
-	for (int i = 0; i < m-k; i++) { //premier copiage
+	for (int i = 0; i < m-k; i++) {
 		for (int j = 0; j < n; j++) {
 			J.at<Vec3b>(i,j) = I.at<Vec3b>(i,j);
 		}
 	}
-	printf("beginning of adding again");
 	for (int o = k-1; o >= 0; o--) {
 		for (int i= 0; i < n; i++) {
 			int begin = seams[o][i];
@@ -230,7 +225,50 @@ void addmultiplehorizontal(int k, int m, int n, Mat& Mh, Mat& I, Mat& Energie, M
 			J.at<Vec3b>(begin+1,i) = values[o][i];
 		}
 	}
-	printf("end of function");
+}
+
+void addmultiplevertical(int k, int m, int n, Mat& Mv, Mat& I, Mat& Energie, Mat& Ix, Mat& Iy, Mat& J) { 
+	vector<vector<int>> seams;
+	vector<vector<Vec3b>> values;
+	for (int o = 0; o < k; o++) {
+		printf("iteration %d", o);
+		sobel(I,Ix,Iy,Energie,m,n-o);
+		energymatrixvertical(Energie,Mv,m,n-o);
+		printf("blibli");
+		vector<int> minseam = findvminimalseam(I, Mv, m, n-o);
+		vector<Vec3b> valuesofseam;
+		printf("bla");
+		for (int j = 0; j < m; j++) {
+			printf("blu %d", j);
+			valuesofseam.push_back(I.at<Vec3b>(j, minseam[j]));
+			for (int i = 0; i < o; i++) {
+				if(seams[i][j] > minseam[j]) {
+					seams[i][j]++;
+				}
+			}
+		}
+		printf("bleh");
+		seams.push_back(minseam);
+		values.push_back(valuesofseam);
+		deletevertical(I, minseam, m, n-o);
+	}
+	printf("ok till here");
+	for (int j = 0; j < n-k; j++) {
+		for (int i = 0; i < m; i++) {
+			J.at<Vec3b>(i,j) = I.at<Vec3b>(i,j);
+		}
+	}
+	printf("also copied");
+	for (int o = k-1; o >= 0; o--) {
+		for (int i= 0; i < m; i++) {
+			int begin = seams[o][i];
+			for (int j = n+k-2*o-3; j > begin-1; j--) {
+				J.at<Vec3b>(i, j+2) = J.at<Vec3b>(i,j); 
+			}
+			J.at<Vec3b>(i,begin) = values[o][i];
+			J.at<Vec3b>(i,begin+1) = values[o][i];
+		}
+	}
 }
 
 void deletemultipleverticalthenhorizontal(int p, int q , Mat&Energie, Mat& Mv, Mat& Mh, Mat& Ix, Mat& Iy, Mat& I){
@@ -261,8 +299,8 @@ int main() {
 
 	imshow("Iref",Iref);
 
-	int m = I.rows;
-	int n = I.cols;
+	int r = I.rows;
+	int c = I.cols;
 
 	int p = 10;
 	int q = 5;
@@ -290,8 +328,9 @@ int main() {
 
 	//INSERTION DE LIGNES
 	Mat J;
-	J = Mat(m+200, n, CV_8UC3);
-	addmultiplehorizontal(200, m, n, Mh, I, Energie, Ix, Iy, J);
+	J = Mat(r+20, c, CV_8UC3);
+	addmultiplehorizontal(20, r, c, Mh, I, Energie, Ix, Iy, J);
+	addmultiplevertical(20, r+20, c, Mv, I, Energie, Ix, Iy, J);
 
 	//Mat roi(I, Rect(0,0,n-q,m-p));
 	imshow("added", J);
